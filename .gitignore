@@ -1,0 +1,14 @@
+
+# virtualenv
+venv/
+
+# build stuff
+dist/
+funclog.egg-info/
+
+# Python crap
+*.pyc
+*.pyo
+__pycache__/
+.cache/
+
