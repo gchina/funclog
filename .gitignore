@@ -3,6 +3,7 @@
 venv/
 
 # build stuff
+build/
 dist/
 funclog.egg-info/
 
