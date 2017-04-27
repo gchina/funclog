@@ -36,22 +36,21 @@ def funclog(logger):
     def real_decorator(fn):
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
-            frame = inspect.stack()[1][0]
-            frame_info = inspect.getframeinfo(frame)
+            frame_info = inspect.getframeinfo(inspect.stack()[1][0])
             filename = os.path.basename(frame_info.filename)
             lineno = frame_info.lineno
             func_name = getattr(fn, name_attr)
             arg_string = get_arg_string(args, kwargs)
             source_info = '{}:{}:{}({})'.format(filename, lineno, func_name,
                                                 arg_string)
-            real_logger.debug('calling %s', source_info)
+            real_logger.debug(u'calling %s', source_info)
             try:
                 res = fn(*args, **kwargs)
             except Exception as e:
-                real_logger.exception('%s threw exception:\n%s',
+                real_logger.exception(u'%s threw exception:\n%s',
                                       source_info, e)
                 raise
-            real_logger.debug('%s returned: %s', source_info, res)
+            real_logger.debug(u'%s returned: %s', source_info, res)
             return res
         return wrapper
 
