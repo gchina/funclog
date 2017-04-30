@@ -23,7 +23,7 @@ setup(
     version=about['__version__'],
 
     description=about['__summary__'],
-    long_description='a long description',
+    long_description='funclog is a Python decorator to log debug information for all accesses to a function or class method',
 
     # The project's main homepage.
     url=about['__uri__'],
