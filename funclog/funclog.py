@@ -68,13 +68,13 @@ def funclog(logger):
             except Exception as e:
                 if use_structlog:
                     real_logger.exception(
-                        u'%s threw exception'.format(source_info), e=e)
+                        u'{} threw exception'.format(source_info), e=e)
                 else:
                     real_logger.exception(
                         u'%s threw exception:\n%s', source_info, e)
                 raise
             if use_structlog:
-                real_logger.debug(u'%s returned'.format(source_info), res=res)
+                real_logger.debug(u'{} returned'.format(source_info), res=res)
             else:
                 real_logger.debug(u'%s returned: %s', source_info, res)
             return res
