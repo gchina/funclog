@@ -47,7 +47,7 @@ def funclog(logger):
         return ', '.join(["'{}'".format(a) if type(a) == str else
                           '{}'.format(a) for a in args] +
                          ["{}='{}'".format(a, v) if type(v) == str else
-                          '{}={}'.format(a, v) for a, v in kwargs.items()])
+                          '{}={}'.format(a, v) for a, v in sorted(kwargs.items())])
 
     def real_decorator(fn):
         @functools.wraps(fn)
