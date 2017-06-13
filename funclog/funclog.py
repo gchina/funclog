@@ -16,6 +16,7 @@ from logging import Logger, getLogger
 import inspect
 try:
     import structlog
+    STRUCTLOG = True
 except ImportError:
     STRUCTLOG = False
 
@@ -58,14 +59,24 @@ def funclog(logger):
             arg_string = get_arg_string(args, kwargs)
             source_info = '{}:{}:{}({})'.format(filename, lineno, func_name,
                                                 arg_string)
-            real_logger.debug(u'calling %s', source_info)
+            if use_structlog:
+                real_logger.debug(u'calling', source_info=source_info)
+            else:
+                real_logger.debug(u'calling %s', source_info)
             try:
                 res = fn(*args, **kwargs)
             except Exception as e:
-                real_logger.exception(u'%s threw exception:\n%s',
-                                      source_info, e)
+                if use_structlog:
+                    real_logger.exception(
+                        u'%s threw exception'.format(source_info), e=e)
+                else:
+                    real_logger.exception(
+                        u'%s threw exception:\n%s', source_info, e)
                 raise
-            real_logger.debug(u'%s returned: %s', source_info, res)
+            if use_structlog:
+                real_logger.debug(u'%s returned'.format(source_info), res=res)
+            else:
+                real_logger.debug(u'%s returned: %s', source_info, res)
             return res
         return wrapper
 
