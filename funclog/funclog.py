@@ -14,14 +14,29 @@ import os
 import functools
 from logging import Logger, getLogger
 import inspect
+try:
+    import structlog
+except ImportError:
+    STRUCTLOG = False
 
 
 def funclog(logger):
     """A decorator function that provides debug input/output logging."""
 
+    # check if logger is from structlog
+    use_structlog = False
+    if STRUCTLOG:
+        if isinstance(logger, structlog._config.BoundLoggerLazyProxy):
+            real_logger = logger
+            use_structlog = True
     # If a Logger object is passed in, use that.  Otherwise, get the default
     # Logger.
-    real_logger = logger if isinstance(logger, Logger) else getLogger()
+    if use_structlog:
+        pass
+    elif isinstance(logger, Logger):
+        real_logger = logger
+    else:
+        real_logger = getLogger()
 
     # __qualname__ is prettier but it didn't get added until 3.5
     name_attr = '__name__' if sys.version_info < (3, 5) else '__qualname__'
