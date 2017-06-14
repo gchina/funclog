@@ -14,14 +14,30 @@ import os
 import functools
 from logging import Logger, getLogger
 import inspect
+try:
+    import structlog
+    STRUCTLOG = True
+except ImportError:
+    STRUCTLOG = False
 
 
 def funclog(logger):
     """A decorator function that provides debug input/output logging."""
 
+    # check if logger is from structlog
+    use_structlog = False
+    if STRUCTLOG:
+        if isinstance(logger, structlog._config.BoundLoggerLazyProxy):
+            real_logger = logger
+            use_structlog = True
     # If a Logger object is passed in, use that.  Otherwise, get the default
     # Logger.
-    real_logger = logger if isinstance(logger, Logger) else getLogger()
+    if use_structlog:
+        pass
+    elif isinstance(logger, Logger):
+        real_logger = logger
+    else:
+        real_logger = getLogger()
 
     # __qualname__ is prettier but it didn't get added until 3.5
     name_attr = '__name__' if sys.version_info < (3, 5) else '__qualname__'
@@ -31,7 +47,7 @@ def funclog(logger):
         return ', '.join(["'{}'".format(a) if type(a) == str else
                           '{}'.format(a) for a in args] +
                          ["{}='{}'".format(a, v) if type(v) == str else
-                          '{}={}'.format(a, v) for a, v in kwargs.items()])
+                          '{}={}'.format(a, v) for a, v in sorted(kwargs.items())])
 
     def real_decorator(fn):
         @functools.wraps(fn)
@@ -43,14 +59,24 @@ def funclog(logger):
             arg_string = get_arg_string(args, kwargs)
             source_info = '{}:{}:{}({})'.format(filename, lineno, func_name,
                                                 arg_string)
-            real_logger.debug(u'calling %s', source_info)
+            if use_structlog:
+                real_logger.debug(u'calling', source_info=source_info)
+            else:
+                real_logger.debug(u'calling %s', source_info)
             try:
                 res = fn(*args, **kwargs)
             except Exception as e:
-                real_logger.exception(u'%s threw exception:\n%s',
-                                      source_info, e)
+                if use_structlog:
+                    real_logger.exception(
+                        u'{} threw exception'.format(source_info), e=e)
+                else:
+                    real_logger.exception(
+                        u'%s threw exception:\n%s', source_info, e)
                 raise
-            real_logger.debug(u'%s returned: %s', source_info, res)
+            if use_structlog:
+                real_logger.debug(u'{} returned'.format(source_info), res=res)
+            else:
+                real_logger.debug(u'%s returned: %s', source_info, res)
             return res
         return wrapper
 
