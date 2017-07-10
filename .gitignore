@@ -13,3 +13,6 @@ funclog.egg-info/
 __pycache__/
 .cache/
 
+# Tox stuff
+.tox/
+

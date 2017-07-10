@@ -1,6 +1,7 @@
 """test structlog compatibility."""
 from __future__ import absolute_import, print_function
-import pytest
+
+import inspect
 
 import structlog
 from funclog import funclog
@@ -17,10 +18,10 @@ def foo(a, b, c=None):
 
 def test_simple_functions_with_args_and_kwargs(caplog):
     """test."""
-    foo(12, 3, c=6)
+    linenum, _ = inspect.currentframe().f_lineno, foo(12, 3, c=6)
     exp_output = (
-        'calling test_structlog.py:20:foo(12, 3, c=6)',
-        'test_structlog.py:20:foo(12, 3, c=6) returned: 6.0'
+        'calling test_structlog.py:{}:foo(12, 3, c=6)'.format(linenum),
+        'test_structlog.py:{}:foo(12, 3, c=6) returned: 6.0'.format(linenum),
     )
     for idx, log in enumerate(caplog.records):
         assert log.message == exp_output[idx]
@@ -34,14 +35,14 @@ def bar(a=None, b=None):
 
 def test_simple_functions_with_kwargs(caplog):
     """test."""
-    bar(a='a', b=1)
+    linenum, _ = inspect.currentframe().f_lineno, bar(a='a', b=1)
     assert caplog.records[0].message in (
-        "calling test_structlog.py:37:bar(a='a', b=1)",
-        "calling test_structlog.py:37:bar(b=1, a='a')",
+        "calling test_structlog.py:{}:bar(a='a', b=1)".format(linenum),
+        "calling test_structlog.py:{}:bar(b=1, a='a')".format(linenum),
     )
     assert caplog.records[1].message in (
-        "test_structlog.py:37:bar(a='a', b=1) returned: False",
-        "test_structlog.py:37:bar(b=1, a='a') returned: False",
+        "test_structlog.py:{}:bar(a='a', b=1) returned: False".format(linenum),
+        "test_structlog.py:{}:bar(b=1, a='a') returned: False".format(linenum),
     )
 
 
@@ -69,8 +70,8 @@ class Foo(object):
 def test_instance_method(caplog):
     """test."""
     cls = Foo()
-    cls.instance_method(1, 2)
+    linenum, _ = inspect.currentframe().f_lineno, cls.instance_method(1, 2)
     assert caplog.records[0].message.startswith(
-        "calling test_structlog.py:72:Foo.instance_method(<test_structlog.Foo object at 0x")
+        "calling test_structlog.py:{}:Foo.instance_method(<test_structlog.Foo object at 0x".format(linenum))
     assert caplog.records[1].message.startswith(
-        "test_structlog.py:72:Foo.instance_method(<test_structlog.Foo object at 0x")
+        "test_structlog.py:{}:Foo.instance_method(<test_structlog.Foo object at 0x".format(linenum))
