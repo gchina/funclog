@@ -1,32 +1,19 @@
-"""
-Unit tests for funclog decorator.
-
-Currently the method tests expected output is formatted for Python >=3.5.
-"""
+"""Unit tests for funclog decorator."""
 from __future__ import absolute_import, print_function
-import pytest
-import logging
 import sys
+import logging
 import inspect
-from io import StringIO
+import collections
+
+import pytest
 from funclog import funclog
 
 
 logfmt = '%(name)s %(levelname)s %(message)s'
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.DEBUG)
-root_formatter = logging.Formatter(logfmt)
-root_buffer = StringIO()
-root_handler = logging.StreamHandler(root_buffer)
-root_handler.setFormatter(root_formatter)
-root_logger.addHandler(root_handler)
+logging.basicConfig(format=logfmt, level=logging.DEBUG)
+logger = logging.getLogger('abc')
 
-log_buffer = StringIO()
-logger = logging.getLogger('test')
-logger.setLevel(logging.DEBUG)
-fh = logging.StreamHandler(log_buffer)
-fh.setFormatter(logging.Formatter(logfmt))
-logger.addHandler(fh)
+Expected = collections.namedtuple('Expected', 'name level message')
 
 
 @funclog(logger)
@@ -49,7 +36,7 @@ class Foo(object):
         return a + b
 
     @staticmethod
-    @funclog(logger)
+    @funclog
     def static_method(a, b):
         """Test static method."""
         return a - b
@@ -61,173 +48,199 @@ class Foo(object):
         return a * b
 
 
-def test_simple_functions():
-    root_buffer.truncate(0)
-    root_buffer.seek(0)
-    log_buffer.truncate(0)
-    log_buffer.seek(0)
+def test_simple_function_with_no_args(caplog):
     linenum, _ = inspect.currentframe().f_lineno, bar()
-    expected_buf = [
-        u'root DEBUG calling test_funclog.py:{}:bar()'.format(linenum),
-        u'root DEBUG test_funclog.py:{}:bar() returned: True'.format(linenum),
-    ]
-    temp_buf = root_buffer.getvalue().strip().split('\n')
-    assert expected_buf == temp_buf
-    assert len(log_buffer.getvalue()) == 0
+    expected = (
+        Expected(name='root',
+                 level='DEBUG',
+                 message='calling test_funclog.py:{}:bar()'.format(linenum)),
+        Expected(name='root',
+                 level='DEBUG',
+                 message='test_funclog.py:{}:bar() returned: True'.format(linenum)),
+    )
+    for idx, exp in enumerate(expected):
+        assert caplog.records[idx].name == exp.name
+        assert caplog.records[idx].levelname == exp.level
+        assert caplog.records[idx].message == exp.message
 
-    root_buffer.truncate(0)
-    root_buffer.seek(0)
-    log_buffer.truncate(0)
-    log_buffer.seek(0)
+
+def test_simple_function_with_args_and_kwargs(caplog):
     linenum, _ = inspect.currentframe().f_lineno, foo(12, 3, c=6)
-    expected_buf = [
-        u'test DEBUG calling test_funclog.py:{}:foo(12, 3, c=6)'.format(linenum),
-        u'test DEBUG test_funclog.py:{}:foo(12, 3, c=6) returned: 6'.format(linenum),
-    ]
-    temp_buf = root_buffer.getvalue().strip().split('\n')
-    assert temp_buf[0] == expected_buf[0]
-    assert temp_buf[1].startswith(expected_buf[1])
+    expected = (
+        Expected(name='abc',
+                 level='DEBUG',
+                 message='calling test_funclog.py:{}:foo(12, 3, c=6)'.format(linenum)),
+        Expected(name='abc',
+                 level='DEBUG',
+                 message='test_funclog.py:{}:foo(12, 3, c=6) returned: 6'.format(linenum)),
+    )
+    for idx, exp in enumerate(expected):
+        assert caplog.records[idx].name == exp.name
+        assert caplog.records[idx].levelname == exp.level
+        assert caplog.records[idx].message.startswith(exp.message)
 
-    root_buffer.truncate(0)
-    root_buffer.seek(0)
-    log_buffer.truncate(0)
-    log_buffer.seek(0)
+
+def test_simple_function_with_typeerror(caplog):
     with pytest.raises(TypeError):
         linenum = inspect.currentframe().f_lineno + 1
         foo(12, 3, c='hello')
-    expected_buf = [
-        u"test DEBUG calling test_funclog.py:{}:foo(12, 3, c='hello')".format(linenum),
-        u"test ERROR test_funclog.py:{}:foo(12, 3, c='hello') threw exception:".format(linenum),
-        u"unsupported operand type(s) for +: 'int' and 'str'"
-    ]
-    temp_buf = root_buffer.getvalue().strip().split('\n')
-    assert expected_buf == temp_buf[:3]
-    temp_buf = log_buffer.getvalue().strip().split('\n')
-    assert expected_buf == temp_buf[:3]
+    expected = (
+        Expected(name='abc',
+                 level='DEBUG',
+                 message="calling test_funclog.py:{}:foo(12, 3, c='hello')".format(linenum)),
+        Expected(name='abc',
+                 level='ERROR',
+                 message="""test_funclog.py:{}:foo(12, 3, c='hello') threw exception:\nunsupported operand type(s) for +: 'int' and 'str'""".format(linenum)),
+    )
+    for idx, exp in enumerate(expected):
+        assert caplog.records[idx].name == exp.name
+        assert caplog.records[idx].levelname == exp.level
+        assert caplog.records[idx].message == exp.message
 
-    root_buffer.truncate(0)
-    root_buffer.seek(0)
-    log_buffer.truncate(0)
-    log_buffer.seek(0)
+
+def test_simple_function_with_other_args(caplog):
     linenum, _ = inspect.currentframe().f_lineno, bar('a', 1)
-    expected_buf = [
-        u"root DEBUG calling test_funclog.py:{}:bar('a', 1)".format(linenum),
-        u"root DEBUG test_funclog.py:{}:bar('a', 1) returned: False".format(linenum),
-    ]
-    temp_buf = root_buffer.getvalue().strip().split('\n')
-    assert expected_buf == temp_buf
-    assert len(log_buffer.getvalue()) == 0
+    expected = (
+        Expected(name='root',
+                 level='DEBUG',
+                 message="calling test_funclog.py:{}:bar('a', 1)".format(linenum)),
+        Expected(name='root',
+                 level='DEBUG',
+                 message="test_funclog.py:{}:bar('a', 1) returned: False".format(linenum)),
+    )
+    for idx, exp in enumerate(expected):
+        assert caplog.records[idx].name == exp.name
+        assert caplog.records[idx].levelname == exp.level
+        assert caplog.records[idx].message == exp.message
 
-    root_buffer.truncate(0)
-    root_buffer.seek(0)
-    log_buffer.truncate(0)
-    log_buffer.seek(0)
+
+def test_simple_function_with_another_typeerror(caplog):
     with pytest.raises(TypeError):
         linenum = inspect.currentframe().f_lineno + 1
         foo('a', 3)
-    expected_buf = [
-        u"test DEBUG calling test_funclog.py:{}:foo('a', 3)".format(linenum),
-        u"test ERROR test_funclog.py:{}:foo('a', 3) threw exception:".format(linenum),
-        u"unsupported operand type(s) for /: 'str' and 'int'"
-    ]
-    temp_buf = root_buffer.getvalue().strip().split('\n')
-    assert expected_buf == temp_buf[:3]
-    temp_buf = log_buffer.getvalue().strip().split('\n')
-    assert expected_buf == temp_buf[:3]
+    expected = (
+        Expected(name='abc',
+                 level='DEBUG',
+                 message="calling test_funclog.py:{}:foo('a', 3)".format(linenum)),
+        Expected(name='abc',
+                 level='ERROR',
+                 message="test_funclog.py:{}:foo('a', 3) threw exception:\nunsupported operand type(s) for /: 'str' and 'int'".format(linenum)),
+    )
+    for idx, exp in enumerate(expected):
+        assert caplog.records[idx].name == exp.name
+        assert caplog.records[idx].levelname == exp.level
+        assert caplog.records[idx].message == exp.message
 
-    # Testing kwargs-only arguments.  This is tricky because the kwargs
-    # dictionary could be randomly re-ordered.
-    root_buffer.truncate(0)
-    root_buffer.seek(0)
-    log_buffer.truncate(0)
-    log_buffer.seek(0)
+
+def test_simple_function_with_kwargs(caplog):
     linenum, _ = inspect.currentframe().f_lineno, bar(a='a', b=1)
-    expected_buf = [
-        u"root DEBUG calling test_funclog.py:{}:bar(a='a', b=1)".format(linenum),
-        u"root DEBUG test_funclog.py:{}:bar(a='a', b=1) returned: False".format(linenum),
-    ]
-    temp_buf = root_buffer.getvalue().strip().split('\n')
-    assert expected_buf == temp_buf
-    assert len(log_buffer.getvalue()) == 0
+    expected = (
+        Expected(name='root',
+                 level='DEBUG',
+                 message="calling test_funclog.py:{}:bar(a='a', b=1)".format(linenum)),
+        Expected(name='root',
+                 level='DEBUG',
+                 message="test_funclog.py:{}:bar(a='a', b=1) returned: False".format(linenum)),
+    )
+    for idx, exp in enumerate(expected):
+        assert caplog.records[idx].name == exp.name
+        assert caplog.records[idx].levelname == exp.level
+        assert caplog.records[idx].message == exp.message
 
-    root_buffer.truncate(0)
-    root_buffer.seek(0)
-    log_buffer.truncate(0)
-    log_buffer.seek(0)
+
+def test_simple_function_with_funcwargs(caplog):
     linenum, _ = inspect.currentframe().f_lineno, bar(a='a', b=foo)
-    expected_buf = [
-        u"root DEBUG calling test_funclog.py:{}:bar(a='a', b=<function foo at ".format(linenum),
-        u"root DEBUG test_funclog.py:{}:bar(a='a', b=<function foo at ".format(linenum),
-    ]
-    temp_buf = root_buffer.getvalue().strip().split('\n')
-    assert temp_buf[0].startswith(expected_buf[0])
-    assert temp_buf[1].startswith(expected_buf[1])
-    assert len(log_buffer.getvalue()) == 0
-
-    root_buffer.truncate(0)
-    root_buffer.seek(0)
-    log_buffer.truncate(0)
-    log_buffer.seek(0)
-    linenum, _ = inspect.currentframe().f_lineno, bar(a='a', b=foo(4, 2))
-    expected_buf = [
-        u"test DEBUG calling test_funclog.py:{}:foo(4, 2)".format(linenum),
-        u"test DEBUG test_funclog.py:{}:foo(4, 2) returned: 2".format(linenum),
-        u"root DEBUG calling test_funclog.py:{}:bar(a='a', b=2".format(linenum),
-        u"root DEBUG test_funclog.py:{}:bar(a='a', b=2) returned: False".format(linenum),
-    ]
-    temp_buf = root_buffer.getvalue().strip().split('\n')
-    assert expected_buf[0] == temp_buf[0]
-    assert temp_buf[1].startswith(expected_buf[1])
-    assert temp_buf[2].startswith(expected_buf[2])
-#    assert expected_buf[3] == temp_buf[3]
+    expected = (
+        Expected(name='root',
+                 level='DEBUG',
+                 message="calling test_funclog.py:{}:bar(a='a', b=<function foo at 0x".format(linenum)),
+        Expected(name='root',
+                 level='DEBUG',
+                 message="test_funclog.py:{}:bar(a='a', b=<function foo at 0x".format(linenum)),
+    )
+    for idx, exp in enumerate(expected):
+        assert caplog.records[idx].name == exp.name
+        assert caplog.records[idx].levelname == exp.level
+        assert caplog.records[idx].message.startswith(exp.message)
 
 
-def test_simple_methods():
-    root_buffer.truncate(0)
-    root_buffer.seek(0)
+def test_nested_functions(caplog):
+    linenum, _ = inspect.currentframe().f_lineno, bar(a='a', b=int(foo(4, 2)))
+    expected = (
+        Expected(name='abc',
+                 level='DEBUG',
+                 message="calling test_funclog.py:{}:foo(4, 2)".format(linenum)),
+        Expected(name='abc',
+                 level='DEBUG',
+                 message="test_funclog.py:{}:foo(4, 2) returned: 2".format(linenum)),
+        Expected(name='root',
+                 level='DEBUG',
+                 message="calling test_funclog.py:{}:bar(a='a', b=2)".format(linenum)),
+        Expected(name='root',
+                 level='DEBUG',
+                 message="test_funclog.py:{}:bar(a='a', b=2) returned: False".format(linenum)),
+    )
+    for idx, exp in enumerate(expected):
+        assert caplog.records[idx].name == exp.name
+        assert caplog.records[idx].levelname == exp.level
+        assert caplog.records[idx].message.startswith(exp.message)
+
+
+def test_instance_method(caplog):
     linenum, _ = inspect.currentframe().f_lineno, Foo().instance_method(1, 2)
     if sys.version_info < (3, 5):
-        expected_buf = [
-            "test DEBUG calling test_funclog.py:{}:instance_method(<test_funclog.Foo object at".format(linenum),
-            "test DEBUG test_funclog.py:{}:instance_method(<test_funclog.Foo object at".format(linenum),
-        ]
+        signature = 'instance_method'
     else:
-        expected_buf = [
-            "test DEBUG calling test_funclog.py:{}:Foo.instance_method(<test_funclog.Foo object at".format(linenum),
-            "test DEBUG test_funclog.py:{}:Foo.instance_method(<test_funclog.Foo object at".format(linenum),
-        ]
-    temp_buf = root_buffer.getvalue().strip().split('\n')
-    assert temp_buf[0].startswith(expected_buf[0])
-    assert temp_buf[1].startswith(expected_buf[1])
+        signature = 'Foo.instance_method'
+    expected = (
+        Expected(name='abc',
+                 level='DEBUG',
+                 message='calling test_funclog.py:{}:{}(<test_funclog.Foo object at 0x'.format(linenum, signature)),
+        Expected(name='abc',
+                 level='DEBUG',
+                 message='test_funclog.py:{}:{}(<test_funclog.Foo object at 0x'.format(linenum, signature)),
+    )
+    for idx, exp in enumerate(expected):
+        assert caplog.records[idx].name == exp.name
+        assert caplog.records[idx].levelname == exp.level
+        assert caplog.records[idx].message.startswith(exp.message)
 
-    root_buffer.truncate(0)
-    root_buffer.seek(0)
+
+def test_static_method(caplog):
     linenum, _ = inspect.currentframe().f_lineno, Foo.static_method(12, 3)
     if sys.version_info < (3, 5):
-        expected_buf = [
-            u"test DEBUG calling test_funclog.py:{}:static_method(12, 3)".format(linenum),
-            u"test DEBUG test_funclog.py:{}:static_method(12, 3) returned: 9".format(linenum),
-        ]
+        signature = 'static_method'
     else:
-        expected_buf = [
-            u"test DEBUG calling test_funclog.py:{}:Foo.static_method(12, 3)".format(linenum),
-            u"test DEBUG test_funclog.py:{}:Foo.static_method(12, 3) returned: 9".format(linenum),
-        ]
-    temp_buf = root_buffer.getvalue().strip().split('\n')
-    assert expected_buf == temp_buf
+        signature = 'Foo.static_method'
+    expected = (
+        Expected(name='root',
+                 level='DEBUG',
+                 message="calling test_funclog.py:{}:{}(12, 3)".format(linenum, signature)),
+        Expected(name='root',
+                 level='DEBUG',
+                 message="test_funclog.py:{}:{}(12, 3) returned: 9".format(linenum, signature)),
+    )
+    for idx, exp in enumerate(expected):
+        assert caplog.records[idx].name == exp.name
+        assert caplog.records[idx].levelname == exp.level
+        assert caplog.records[idx].message == exp.message
 
-    root_buffer.truncate(0)
-    root_buffer.seek(0)
+
+def test_class_method(caplog):
     linenum, _ = inspect.currentframe().f_lineno, Foo.class_method(5, 6)
     if sys.version_info < (3, 5):
-        expected_buf = [
-            u"test DEBUG calling test_funclog.py:{}:class_method(<class 'test_funclog.Foo'>, 5, 6)".format(linenum),
-            u"test DEBUG test_funclog.py:{}:class_method(<class 'test_funclog.Foo'>, 5, 6) returned: 30".format(linenum),
-        ]
+        signature = 'class_method'
     else:
-        expected_buf = [
-            u"test DEBUG calling test_funclog.py:{}:Foo.class_method(<class 'test_funclog.Foo'>, 5, 6)".format(linenum),
-            u"test DEBUG test_funclog.py:{}:Foo.class_method(<class 'test_funclog.Foo'>, 5, 6) returned: 30".format(linenum),
-        ]
-    temp_buf = root_buffer.getvalue().strip().split('\n')
-    assert expected_buf == temp_buf
+        signature = 'Foo.class_method'
+    expected = (
+        Expected(name='abc',
+                 level='DEBUG',
+                 message="calling test_funclog.py:{}:{}(<class 'test_funclog.Foo'>, 5, 6)".format(linenum, signature)),
+        Expected(name='abc',
+                 level='DEBUG',
+                 message="test_funclog.py:{}:{}(<class 'test_funclog.Foo'>, 5, 6) returned: 30".format(linenum, signature)),
+    )
+    for idx, exp in enumerate(expected):
+        assert caplog.records[idx].name == exp.name
+        assert caplog.records[idx].levelname == exp.level
+        assert caplog.records[idx].message.startswith(exp.message)

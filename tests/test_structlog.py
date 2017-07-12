@@ -1,13 +1,14 @@
 """test structlog compatibility."""
 from __future__ import absolute_import, print_function
 
+import sys
 import inspect
 
 import structlog
 from funclog import funclog
 
 
-logger = structlog.getLogger()
+logger = structlog.PrintLogger(sys.stderr)
 
 
 @funclog(logger)
@@ -16,15 +17,17 @@ def foo(a, b, c=None):
     return (a + c) / b if c else a / b
 
 
-def test_simple_functions_with_args_and_kwargs(caplog):
+def test_simple_function_with_args_and_kwargs(caplog):
     """test."""
     linenum, _ = inspect.currentframe().f_lineno, foo(12, 3, c=6)
     exp_output = (
         'calling test_structlog.py:{}:foo(12, 3, c=6)'.format(linenum),
-        'test_structlog.py:{}:foo(12, 3, c=6) returned: 6.0'.format(linenum),
+        'test_structlog.py:{}:foo(12, 3, c=6) returned: 6'.format(linenum),
     )
-    for idx, log in enumerate(caplog.records):
-        assert log.message == exp_output[idx]
+    for idx, exp in enumerate(exp_output):
+        assert caplog.records[idx].name == 'root'
+        assert caplog.records[idx].levelname == 'DEBUG'
+        assert caplog.records[idx].message.startswith(exp)
 
 
 @funclog
@@ -33,17 +36,17 @@ def bar(a=None, b=None):
     return a == b
 
 
-def test_simple_functions_with_kwargs(caplog):
+def test_simple_function_with_kwargs(caplog):
     """test."""
     linenum, _ = inspect.currentframe().f_lineno, bar(a='a', b=1)
-    assert caplog.records[0].message in (
+    exp_output = (
         "calling test_structlog.py:{}:bar(a='a', b=1)".format(linenum),
-        "calling test_structlog.py:{}:bar(b=1, a='a')".format(linenum),
-    )
-    assert caplog.records[1].message in (
         "test_structlog.py:{}:bar(a='a', b=1) returned: False".format(linenum),
-        "test_structlog.py:{}:bar(b=1, a='a') returned: False".format(linenum),
     )
+    for idx, exp in enumerate(exp_output):
+        assert caplog.records[idx].name == 'root'
+        assert caplog.records[idx].levelname == 'DEBUG'
+        assert caplog.records[idx].message == exp
 
 
 class Foo(object):
@@ -71,7 +74,15 @@ def test_instance_method(caplog):
     """test."""
     cls = Foo()
     linenum, _ = inspect.currentframe().f_lineno, cls.instance_method(1, 2)
-    assert caplog.records[0].message.startswith(
-        "calling test_structlog.py:{}:Foo.instance_method(<test_structlog.Foo object at 0x".format(linenum))
-    assert caplog.records[1].message.startswith(
-        "test_structlog.py:{}:Foo.instance_method(<test_structlog.Foo object at 0x".format(linenum))
+    if sys.version_info < (3, 5):
+        signature = 'instance_method'
+    else:
+        signature = 'Foo.instance_method'
+    exp_output = (
+        'calling test_structlog.py:{}:{}(<test_structlog.Foo object at 0x'.format(linenum, signature),
+        'test_structlog.py:{}:{}(<test_structlog.Foo object at 0x'.format(linenum, signature),
+    )
+    for idx, exp in enumerate(exp_output):
+        assert caplog.records[idx].name == 'root'
+        assert caplog.records[idx].levelname == 'DEBUG'
+        assert caplog.records[idx].message.startswith(exp)
